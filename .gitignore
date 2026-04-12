@@ -17,19 +17,8 @@ dist/
 nbdist/
 .nb-gradle/
 
-# IntelliJ
-.idea/
-*.iml
-
-# VS Code
-.vscode/
-
 # OS files
 .DS_Store
 Thumbs.db
-SmartCampusApi/target/maven-status/maven-compiler-plugin/compile/default-compile/createdFiles.lst
-*.lst
-*.lst
-*.lst
-*.lst
-*.lst
+
+
