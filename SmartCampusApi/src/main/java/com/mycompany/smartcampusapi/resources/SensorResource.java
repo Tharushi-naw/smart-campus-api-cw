@@ -32,12 +32,12 @@ public class SensorResource {
         // Get all sensors from the in-memory store
         List<Sensor> sensorList = new ArrayList<>(InMemoryStore.sensorStore.values());
 
-        // If no type is provided, return the full list
+        // Return all sensors if no type filter is provided
         if (isBlank(requestedType)) {
             return Response.ok(sensorList).build();
         }
 
-        // Filter sensors by type when a query parameter is given
+        // Filter sensors by type
         List<Sensor> filteredSensors = new ArrayList<>();
         for (Sensor currentSensor : sensorList) {
             if (currentSensor.getSensorType() != null
@@ -65,14 +65,14 @@ public class SensorResource {
 
     @POST
     public Response createSensor(Sensor newSensor, @Context UriInfo uriInfo) {
-        // Check that the request body exists
+        // Make sure request data is provided
         if (newSensor == null) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(createMessageBody("Sensor data is required."))
                     .build();
         }
 
-        // Required fields for creating a sensor
+        // Validate required fields
         if (isBlank(newSensor.getSensorId())
                 || isBlank(newSensor.getSensorType())
                 || isBlank(newSensor.getRoomId())) {
@@ -89,7 +89,7 @@ public class SensorResource {
                         .build();
             }
 
-            // Make sure the sensor is linked to an existing room
+            // Check whether the room exists before attaching the sensor
             Room linkedRoom = InMemoryStore.roomStore.get(newSensor.getRoomId());
             if (linkedRoom == null) {
                 return Response.status(422)
@@ -97,7 +97,7 @@ public class SensorResource {
                         .build();
             }
 
-            // Set a default status if one is not provided
+            // Set a default status if none is provided
             if (isBlank(newSensor.getSensorStatus())) {
                 newSensor.setSensorStatus("ACTIVE");
             }
@@ -105,11 +105,10 @@ public class SensorResource {
             InMemoryStore.sensorStore.put(newSensor.getSensorId(), newSensor);
             linkedRoom.getSensorIds().add(newSensor.getSensorId());
 
-            // Start an empty reading history for the new sensor
+            // Create an empty reading history list for the new sensor
             InMemoryStore.readingHistoryStore.put(newSensor.getSensorId(), new ArrayList<>());
         }
 
-        // Build the URI of the newly created sensor
         URI sensorUri = uriInfo.getAbsolutePathBuilder()
                 .path(newSensor.getSensorId())
                 .build();
@@ -119,14 +118,20 @@ public class SensorResource {
                 .build();
     }
 
-    // Helper method for sending simple JSON messages
+    // Sub resource locator for handling readings under a specific sensor
+    @Path("/{sensorId}/readings")
+    public SensorReadingResource getSensorReadingResource(@PathParam("sensorId") String sensorId) {
+        return new SensorReadingResource(sensorId);
+    }
+
+    // Helper method for simple JSON message responses
     private Map<String, String> createMessageBody(String messageText) {
         Map<String, String> messageBody = new LinkedHashMap<>();
         messageBody.put("message", messageText);
         return messageBody;
     }
 
-    // Utility method for checking null or empty strings
+    // Utility method to check for null or empty strings
     private boolean isBlank(String textValue) {
         return textValue == null || textValue.trim().isEmpty();
     }
