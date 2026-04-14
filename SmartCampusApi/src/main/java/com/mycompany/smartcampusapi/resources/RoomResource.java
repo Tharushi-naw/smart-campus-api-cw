@@ -2,13 +2,13 @@
 
 package com.mycompany.smartcampusapi.resources;
 
+import com.mycompany.smartcampusapi.exceptions.ResourceNotFoundException;
+import com.mycompany.smartcampusapi.exceptions.RoomNotEmptyException;
 import com.mycompany.smartcampusapi.models.Room;
 import com.mycompany.smartcampusapi.store.InMemoryStore;
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
@@ -35,29 +35,22 @@ public class RoomResource {
 
     @POST
     public Response createRoom(Room newRoom, @Context UriInfo uriInfo) {
-        // Basic null check for the incoming request body
+        // Validate the incoming room data before saving it
         if (newRoom == null) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(createMessageBody("Room data is required."))
-                    .build();
+            throw new IllegalArgumentException("Room data is required.");
         }
 
-        // roomId and roomName are required fields
         if (isBlank(newRoom.getRoomId()) || isBlank(newRoom.getRoomName())) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(createMessageBody("roomId and roomName are required."))
-                    .build();
+            throw new IllegalArgumentException("roomId and roomName are required.");
         }
 
         synchronized (InMemoryStore.roomStore) {
             // Prevent duplicate room IDs
             if (InMemoryStore.roomStore.containsKey(newRoom.getRoomId())) {
-                return Response.status(Response.Status.CONFLICT)
-                        .entity(createMessageBody("A room with this roomId already exists."))
-                        .build();
+                throw new IllegalStateException("A room with this roomId already exists.");
             }
 
-            // Make sure sensorIds is never left null
+            // Make sure sensorIds is always initialized
             if (newRoom.getSensorIds() == null) {
                 newRoom.setSensorIds(new ArrayList<>());
             }
@@ -81,9 +74,7 @@ public class RoomResource {
         Room foundRoom = InMemoryStore.roomStore.get(roomId);
 
         if (foundRoom == null) {
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity(createMessageBody("Room with ID " + roomId + " was not found."))
-                    .build();
+            throw new ResourceNotFoundException("Room with ID " + roomId + " was not found.");
         }
 
         return Response.ok(foundRoom).build();
@@ -96,16 +87,12 @@ public class RoomResource {
             Room roomToDelete = InMemoryStore.roomStore.get(roomId);
 
             if (roomToDelete == null) {
-                return Response.status(Response.Status.NOT_FOUND)
-                        .entity(createMessageBody("Room with ID " + roomId + " was not found."))
-                        .build();
+                throw new ResourceNotFoundException("Room with ID " + roomId + " was not found.");
             }
 
-            // Do not allow deletion if sensors are still linked to the room
+            // Do not allow deleting a room that still has sensors linked to it
             if (roomToDelete.getSensorIds() != null && !roomToDelete.getSensorIds().isEmpty()) {
-                return Response.status(Response.Status.CONFLICT)
-                        .entity(createMessageBody("Room cannot be deleted because sensors are still assigned to it."))
-                        .build();
+                throw new RoomNotEmptyException("Room cannot be deleted because sensors are still assigned to it.");
             }
 
             InMemoryStore.roomStore.remove(roomId);
@@ -114,14 +101,7 @@ public class RoomResource {
         return Response.noContent().build();
     }
 
-    // Small helper method to return consistent message responses
-    private Map<String, String> createMessageBody(String messageText) {
-        Map<String, String> messageBody = new LinkedHashMap<>();
-        messageBody.put("message", messageText);
-        return messageBody;
-    }
-
-    // Utility method for simple blank string validation
+    // Simple helper method for blank string validation
     private boolean isBlank(String textValue) {
         return textValue == null || textValue.trim().isEmpty();
     }
