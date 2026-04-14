@@ -2,14 +2,14 @@
 
 package com.mycompany.smartcampusapi.resources;
 
+import com.mycompany.smartcampusapi.exceptions.LinkedResourceNotFoundException;
+import com.mycompany.smartcampusapi.exceptions.ResourceNotFoundException;
 import com.mycompany.smartcampusapi.models.Room;
 import com.mycompany.smartcampusapi.models.Sensor;
 import com.mycompany.smartcampusapi.store.InMemoryStore;
 import java.net.URI;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
 import javax.ws.rs.POST;
@@ -37,7 +37,7 @@ public class SensorResource {
             return Response.ok(sensorList).build();
         }
 
-        // Filter sensors by type
+        // Filter sensors by the requested type
         List<Sensor> filteredSensors = new ArrayList<>();
         for (Sensor currentSensor : sensorList) {
             if (currentSensor.getSensorType() != null
@@ -54,10 +54,9 @@ public class SensorResource {
     public Response getSensorById(@PathParam("sensorId") String sensorId) {
         Sensor foundSensor = InMemoryStore.sensorStore.get(sensorId);
 
+        // Throw a custom exception if the sensor cannot be found
         if (foundSensor == null) {
-            return Response.status(Response.Status.NOT_FOUND)
-                    .entity(createMessageBody("Sensor with ID " + sensorId + " was not found."))
-                    .build();
+            throw new ResourceNotFoundException("Sensor with ID " + sensorId + " was not found.");
         }
 
         return Response.ok(foundSensor).build();
@@ -65,39 +64,30 @@ public class SensorResource {
 
     @POST
     public Response createSensor(Sensor newSensor, @Context UriInfo uriInfo) {
-        // Make sure request data is provided
+        // Validate the incoming sensor payload
         if (newSensor == null) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(createMessageBody("Sensor data is required."))
-                    .build();
+            throw new IllegalArgumentException("Sensor data is required.");
         }
 
-        // Validate required fields
         if (isBlank(newSensor.getSensorId())
                 || isBlank(newSensor.getSensorType())
                 || isBlank(newSensor.getRoomId())) {
-            return Response.status(Response.Status.BAD_REQUEST)
-                    .entity(createMessageBody("sensorId, sensorType and roomId are required."))
-                    .build();
+            throw new IllegalArgumentException("sensorId, sensorType and roomId are required.");
         }
 
         synchronized (InMemoryStore.sensorStore) {
             // Prevent duplicate sensor IDs
             if (InMemoryStore.sensorStore.containsKey(newSensor.getSensorId())) {
-                return Response.status(Response.Status.CONFLICT)
-                        .entity(createMessageBody("A sensor with this sensorId already exists."))
-                        .build();
+                throw new IllegalStateException("A sensor with this sensorId already exists.");
             }
 
-            // Check whether the room exists before attaching the sensor
+            // Make sure the room exists before linking the sensor to it
             Room linkedRoom = InMemoryStore.roomStore.get(newSensor.getRoomId());
             if (linkedRoom == null) {
-                return Response.status(422)
-                        .entity(createMessageBody("The specified roomId does not exist."))
-                        .build();
+                throw new LinkedResourceNotFoundException("The specified roomId does not exist.");
             }
 
-            // Set a default status if none is provided
+            // Default status is ACTIVE if nothing is provided
             if (isBlank(newSensor.getSensorStatus())) {
                 newSensor.setSensorStatus("ACTIVE");
             }
@@ -105,7 +95,7 @@ public class SensorResource {
             InMemoryStore.sensorStore.put(newSensor.getSensorId(), newSensor);
             linkedRoom.getSensorIds().add(newSensor.getSensorId());
 
-            // Create an empty reading history list for the new sensor
+            // Start an empty reading history for the new sensor
             InMemoryStore.readingHistoryStore.put(newSensor.getSensorId(), new ArrayList<>());
         }
 
@@ -118,20 +108,13 @@ public class SensorResource {
                 .build();
     }
 
-    // Sub resource locator for handling readings under a specific sensor
+    // Route reading-related requests to the sub-resource
     @Path("/{sensorId}/readings")
     public SensorReadingResource getSensorReadingResource(@PathParam("sensorId") String sensorId) {
         return new SensorReadingResource(sensorId);
     }
 
-    // Helper method for simple JSON message responses
-    private Map<String, String> createMessageBody(String messageText) {
-        Map<String, String> messageBody = new LinkedHashMap<>();
-        messageBody.put("message", messageText);
-        return messageBody;
-    }
-
-    // Utility method to check for null or empty strings
+    // Utility method for checking blank string values
     private boolean isBlank(String textValue) {
         return textValue == null || textValue.trim().isEmpty();
     }
