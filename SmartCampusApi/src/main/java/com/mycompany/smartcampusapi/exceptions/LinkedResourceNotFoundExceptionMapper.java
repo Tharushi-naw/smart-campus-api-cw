@@ -1,3 +1,5 @@
+// WATN Nethmi / 20221962 / w1985668
+
 package com.mycompany.smartcampusapi.exceptions;
 
 import com.mycompany.smartcampusapi.models.ErrorMessage;

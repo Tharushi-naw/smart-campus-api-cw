@@ -1,3 +1,5 @@
+// WATN Nethmi / 20221962 / w1985668
+
 package com.mycompany.smartcampusapi.models;
 
 public class SensorReading {
